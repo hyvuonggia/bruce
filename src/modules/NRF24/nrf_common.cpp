@@ -52,6 +52,17 @@ bool nrf_start(NRF24_MODE mode) {
     digitalWrite(bruceConfigPins.NRF24_bus.io0, LOW);
     delay(5); // Let pins settle before SPI traffic
 
+    // This radio shares SCK/MISO/MOSI with both the SD card and (on ADV) CC1101.
+    // Explicitly release every other chip select before the RF24 library starts.
+    if (bruceConfigPins.SDCARD_bus.mosi == bruceConfigPins.NRF24_bus.mosi) {
+        pinMode(bruceConfigPins.SDCARD_bus.cs, OUTPUT);
+        digitalWrite(bruceConfigPins.SDCARD_bus.cs, HIGH);
+    }
+    if (bruceConfigPins.CC1101_bus.mosi == bruceConfigPins.NRF24_bus.mosi) {
+        pinMode(bruceConfigPins.CC1101_bus.cs, OUTPUT);
+        digitalWrite(bruceConfigPins.CC1101_bus.cs, HIGH);
+    }
+
     NRFSPI =
         acquireSPIBus(bruceConfigPins.NRF24_bus.sck, bruceConfigPins.NRF24_bus.miso, bruceConfigPins.NRF24_bus.mosi);
     if (!NRFSPI) {
@@ -60,16 +71,27 @@ bool nrf_start(NRF24_MODE mode) {
     }
     delay(10);
 
-    if (NRFradio.begin(
-            NRFSPI,
-            rf24_gpio_pin_t(bruceConfigPins.NRF24_bus.io0),
-            rf24_gpio_pin_t(bruceConfigPins.NRF24_bus.cs)
-        )) {
-        result = true;
-    } else {
+    const bool radioStarted = NRFradio.begin(
+        NRFSPI,
+        rf24_gpio_pin_t(bruceConfigPins.NRF24_bus.io0),
+        rf24_gpio_pin_t(bruceConfigPins.NRF24_bus.cs)
+    );
+    if (!radioStarted) {
+        Serial.printf(
+            "[NRF24_INIT_FAIL] mode=%d bus=%p fallback=%d pins SCK/MISO/MOSI=%d/%d/%d CS/CE=%d/%d; chip-recheck=%d\n",
+            mode,
+            static_cast<void *>(NRFSPI),
+            NRFSPI == &SPI,
+            (int)bruceConfigPins.NRF24_bus.sck,
+            (int)bruceConfigPins.NRF24_bus.miso,
+            (int)bruceConfigPins.NRF24_bus.mosi,
+            (int)bruceConfigPins.NRF24_bus.cs,
+            (int)bruceConfigPins.NRF24_bus.io0,
+            NRFradio.isChipConnected()
+        );
         return false;
     }
-    return result;
+    return true;
 }
 
 NRF24_MODE nrf_setMode() {

@@ -370,10 +370,11 @@ SPIClass *acquireSPIBus(gpio_num_t sck, gpio_num_t miso, gpio_num_t mosi) {
     if (mosi == (gpio_num_t)TFT_MOSI) return &tft.getSPIinstance();
 #endif
 
-    // Same physical wiring as the SD card: it is mounted for the whole program lifetime, so its
-    // bus is already up and must not be reconfigured.
+    // setupSdCard() mounts the SPI SD card on global SPI with the configured pins.
+    // Use that already-initialized SPIClass here; sdcardSPI is a distinct wrapper
+    // and is not initialized by the global-SPI mount path (notably on Cardputer ADV).
     if (bruceConfigPins.SDCARD_bus.mosi != GPIO_NUM_NC && mosi == bruceConfigPins.SDCARD_bus.mosi) {
-        return &sdcardSPI;
+        return &SPI;
     }
 
     // Neither the display nor the SD card own these pins: fall back to the one remaining hardware
